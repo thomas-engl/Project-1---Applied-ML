@@ -52,14 +52,6 @@ def get_scaled_data(x, y, deg):
     # return feature matrix and targets splitted in test and train data
     return train_test_split(X_norm, y_centered)
 
-"""
-def get_scaled_data(x, y, deg):
-    X = feature_matrix(x, y, deg)
-    # scale data
-    y_centered = y - np.mean(y)
-    X_norm = 
-"""
-
 # ordinary least squares
 
 def ols(feature_matrix, y):
