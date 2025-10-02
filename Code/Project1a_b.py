@@ -52,9 +52,11 @@ def get_scaled_data(x, y, deg):
     # scale data
     X_train = scale_matrix(X_train_)
     X_test = scale_matrix(X_test_)
-    y_train = y_train_ - y_train_.mean()
-    y_test = y_test_ - y_test_.mean()
-    return X_train, X_test, y_train, y_test
+    y_m = y_train_.mean()
+    y_train = y_train_ - y_m
+    y_test = y_test_ - y_m
+    # we also return y_m to be able to rescale the data later
+    return X_train, X_test, y_train, y_test, y_m
 
 # ordinary least squares
 
@@ -128,15 +130,6 @@ def heat_map_ridge(params, degs, values, quantity='MSE'):
     plt.colorbar(im, cax=cax)
     fig.tight_layout()
     plt.show()
-    
-def polynomial(coefficients, x, intercept=True):
-    if intercept:
-        return sum(coefficients[i] * x**i for i in range(len(coefficients)))
-    else:
-        return sum(coefficients[i] * x**(i+1) for i in range(len(coefficients)))
-
-# vectorize the function
-polynomial_v = np.vectorize(polynomial, excluded={0, 2})
 
 
 # In[1]:
@@ -178,7 +171,8 @@ for v in variances:
     r2_ridge_ = []
     beta_ols_ = []                                  # store coeffs for later use
     for deg in degs:
-        X_train, X_test, y_train, y_test = get_scaled_data(x_pts, y_pts_, deg)
+        X_train, X_test, y_train, y_test, y_mean = get_scaled_data(x_pts, 
+                                                                   y_pts_, deg)
         # compute approximation using OLS
         beta_ols = ols(X_train, y_train)
         beta_ols_.append(beta_ols)
@@ -190,6 +184,10 @@ for v in variances:
         y_predict_ridge = X_test @ beta_ridge
         mse_ridge_.append(mse(y_predict_ridge, y_test))
         r2_ridge_.append(r2(y_predict_ridge, y_test))
+        # only for testing later
+        if deg == 8 and v == 0.01:
+            y_ = y_predict + y_mean
+            x_ = X_test[:,0]
     mses_ols.append(mse_ols_)
     r2_ols.append(r2_ols_)
     mses_ridge.append(mse_ridge_)
@@ -207,12 +205,23 @@ plot_results(degs, np.array(r2_ols), np.array(r2_ridge),
              variances, markers, quantity='R2')
 
 
+""" Plot the approximation for one example """
+
+# not in the report - only for checking the result
+# deg = 8, sigma^2 = 0.01
+
+plt.figure(dpi=150)
+plt.scatter(x_, y_)
+plt.grid()
+plt.xlabel(r'$x$')
+plt.ylabel(r'$y_{pred}$')
+plt.show()
+
 # In[3]:
 
 """ Plot coefficients - use sigma^2 = 0.01 from here on """
 
 betas = betas_ols[0]
-print(betas[3::4])
 
 plt.figure(dpi=150)
 colors_ = ['blue', 'red', 'green']
@@ -237,109 +246,98 @@ plt.ylim(-1.5*m, 1.5*m)
 plt.legend()
 plt.show()
 
-""" Plot the approximating polynomial for deg 5, 10, 15 """
-
-plt.figure(dpi=150)
-x = np.linspace(-1, 1, 101)
-for i, beta in enumerate(betas[4::5]):
-    plt.plot(x, polynomial_v(beta, x, intercept=False), 
-              label=r'$\deg = {}$'.format(5*(i+1)))
-# plt.plot(x, runge(x) - np.mean(runge(x)), label=r'$f(x)$')
-plt.grid()
-plt.legend()
-plt.show()
 
 
 # In[4]:
 
-# """
-# Numerical Experiment 2
-# ===============================================================================
-# MSE and R^2 score for Ridge using different hyper parameters
-# """
+"""
+Numerical Experiment 2
+===============================================================================
+MSE and R^2 score for Ridge using different hyper parameters
+"""
 
-# mses = []
-# r2_scores = []
-# lambdas = np.logspace(-5, 0, 6)
-# num_pts = 100
-# x_pts = np.random.uniform(-1, 1, num_pts)
-# degs = np.arange(1, 15)
+mses = []
+r2_scores = []
+lambdas = np.logspace(-5, 0, 6)
+num_pts = 100
+x_pts = np.random.uniform(-1, 1, num_pts)
+degs = np.arange(1, 15)
 
-# for param in lambdas:
-#     lst_mse = []
-#     lst_r2 = []
-#     for deg in degs:
-#         mses_ = []
-#         r2_ = []
-#         # we do 100 experiments for every combination of degree and lambda
-#         for i in range(100):
-#             # noisy data, normal distributed with mean 0 and standard 
-#             # deviation 0.5
-#             y_pts = runge(x_pts) + np.random.normal(0, 0.5, num_pts)
-#             X_train, X_test, y_train, y_test = get_scaled_data(x_pts, y_pts, 
-#                                                                deg)
-#             beta = ridge(X_train, y_train, param)
-#             y_predict = X_test @ beta
-#             mses_.append(mse(y_predict, y_test))
-#             r2_.append(r2(y_predict, y_test))
-#         # compute mean of the mses and r^2 scores
-#         lst_mse.append(np.mean(np.array(mses_)))
-#         lst_r2.append(np.mean(np.array(r2_)))
-#     mses.append(lst_mse)
-#     r2_scores.append(lst_r2)
+for param in lambdas:
+    lst_mse = []
+    lst_r2 = []
+    for deg in degs:
+        mses_ = []
+        r2_ = []
+        # we do 100 experiments for every combination of degree and lambda
+        for i in range(100):
+            # noisy data, normal distributed with mean 0 and standard 
+            # deviation 0.5
+            y_pts = runge(x_pts) + np.random.normal(0, 0.5, num_pts)
+            X_train, X_test, y_train, y_test, _ = get_scaled_data(x_pts, y_pts, 
+                                                                deg)
+            beta = ridge(X_train, y_train, param)
+            y_predict = X_test @ beta
+            mses_.append(mse(y_predict, y_test))
+            r2_.append(r2(y_predict, y_test))
+        # compute mean of the mses and r^2 scores
+        lst_mse.append(np.mean(np.array(mses_)))
+        lst_r2.append(np.mean(np.array(r2_)))
+    mses.append(lst_mse)
+    r2_scores.append(lst_r2)
     
-# """ Plot the MSE and R^2 score for Ridge regression using different hyper
-# parameters """
+""" Plot the MSE and R^2 score for Ridge regression using different hyper
+parameters """
     
-# heat_map_ridge(lambdas, degs, mses)
-# heat_map_ridge(lambdas, degs, r2_scores, quantity='R2')
+heat_map_ridge(lambdas, degs, mses)
+heat_map_ridge(lambdas, degs, r2_scores, quantity='R2')
 
 
-# # In[5]:
+# In[5]:
 
-# """
-# Numerical Experiment 3
-# ===============================================================================
-# train and test error
-# """
+"""
+Numerical Experiment 3
+===============================================================================
+train and test error
+"""
 
-# ### use different data - more noise for more interesting plot
-# num_pts = 100
-# x_pts = np.random.uniform(-1, 1, num_pts)
+### use different data - more noise for more interesting plot
+num_pts = 100
+x_pts = np.random.uniform(-1, 1, num_pts)
 
-# mse_test = []
-# mse_train = []
-# degs = np.arange(1, 11)
-# j = 0
+mse_test = []
+mse_train = []
+degs = np.arange(1, 11)
+j = 0
 
-# for deg in degs:
-#     mse_test_ = []
-#     mse_train_ = []
-#     """
-#     Sample 1000 data sets for every polynomial degree and compute the MSE on
-#     the training and test data.
-#     Finally take the average of the MSEs.
-#     """
-#     for i in range(1000):
-#         # create new random values for y and to this end, always take a new seed
-#         np.random.seed(j)
-#         j += 1
-#         y_pts = runge(x_pts) + np.random.normal(0, 0.5, num_pts)
-#         # create feature matrix
-#         X = feature_matrix(x_pts, deg)
-#         # split in training and test data and scale it
-#         X_train, X_test, y_train, y_test = get_scaled_data(x_pts, y_pts, deg)
-#         theta = ols(X_train, y_train)
-#         mse_test_.append(mse(X_test @ theta, y_test))
-#         mse_train_.append(mse(X_train @ theta, y_train))
-#     mse_test.append(np.mean(mse_test_))
-#     mse_train.append(np.mean(mse_train_))
+for deg in degs:
+    mse_test_ = []
+    mse_train_ = []
+    """
+    Sample 1000 data sets for every polynomial degree and compute the MSE on
+    the training and test data.
+    Finally take the average of the MSEs.
+    """
+    for i in range(1000):
+        # create new random values for y and to this end, always take a new seed
+        np.random.seed(j)
+        j += 1
+        y_pts = runge(x_pts) + np.random.normal(0, 0.5, num_pts)
+        # create feature matrix
+        X = feature_matrix(x_pts, deg)
+        # split in training and test data and scale it
+        X_train, X_test, y_train, y_test, _ = get_scaled_data(x_pts, y_pts, deg)
+        theta = ols(X_train, y_train)
+        mse_test_.append(mse(X_test @ theta, y_test))
+        mse_train_.append(mse(X_train @ theta, y_train))
+    mse_test.append(np.mean(mse_test_))
+    mse_train.append(np.mean(mse_train_))
     
-# plt.figure(dpi=150)    
-# plt.plot(degs, mse_test, '-D', color='red', label='test data')
-# plt.plot(degs, mse_train, '-D', color='blue', label='train data')
-# plt.grid()
-# plt.xlabel('polynomial degree')
-# plt.ylabel('MSE')
-# plt.legend()
-# plt.show()
+plt.figure(dpi=150)    
+plt.plot(degs, mse_test, '-D', color='red', label='test data')
+plt.plot(degs, mse_train, '-D', color='blue', label='train data')
+plt.grid()
+plt.xlabel('polynomial degree')
+plt.ylabel('MSE')
+plt.legend()
+plt.show()
