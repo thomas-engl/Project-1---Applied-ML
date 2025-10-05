@@ -36,22 +36,23 @@ def variance_array(arr):
     m = np.mean(arr)
     return 1/(n-1) * np.sum((arr - m)**2)
 
-def scale_matrix(matrix):
+def get_scaling(matrix):
     n, p = np.shape(matrix)
     mean = np.array([np.mean(matrix[:,i]) for i in range(p)])
     std = np.array([np.sqrt(variance_array(matrix[:,i])) for i in range(p)])
     std[std==0] = 1
-    # for every column, subtract the mean and divide by the standard deviation
-    # finally, remove the first column which is just 0
-    return ((matrix - mean) / std)[:,1:]
+    return mean, std
 
 def get_scaled_data(x, y, deg):
     X = feature_matrix(x, deg)
     # train-test split
     X_train_, X_test_, y_train_, y_test_ = train_test_split(X, y)
     # scale data
-    X_train = scale_matrix(X_train_)
-    X_test = scale_matrix(X_test_)
+    mean, std = get_scaling(X_train_)
+    # for every column, subtract the mean and divide by the standard deviation
+    # finally, remove the first column which is just 0
+    X_train = ((X_train_ - mean) / std)[:,1:]
+    X_test = ((X_test_ - mean) / std)[:,1:]
     y_m = y_train_.mean()
     y_train = y_train_ - y_m
     y_test = y_test_ - y_m
